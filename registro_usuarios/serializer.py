@@ -40,8 +40,11 @@ class RegistroUSerializer(serializers.ModelSerializer):
         elif rol == 'Vicerrector':
             if programa:
                 raise serializers.ValidationError("No se debe seleccionar un programa para el rol Vicerrector.")
+        elif rol == 'Administrador':
+            if programa:
+                raise serializers.ValidationError("No se debe seleccionar un programa para el rol Administrador.")
         else:
-            raise serializers.ValidationError("El rol debe ser 'Coordinador' o 'Vicerrector'.")
+            raise serializers.ValidationError("El rol debe ser 'Administrador, ''Coordinador' o ' Vicerrector'.")
         return data
 
     def create(self, validated_data):

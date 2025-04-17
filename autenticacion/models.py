@@ -5,6 +5,7 @@ import time
 
 class CustomUser(AbstractUser):
     ROL_CHOICES = (
+        ('Administrador', 'Administrador'),
         ('Coordinador', 'Coordinador'),
         ('Vicerrector', 'Vicerrector'),
     )

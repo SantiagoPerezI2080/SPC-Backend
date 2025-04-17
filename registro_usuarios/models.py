@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import make_password
 
 class RegistroU(models.Model):
     ROL_CHOICES = (
+        ('Administrador', 'Administrador'),
         ('Coordinador', 'Coordinador'),
         ('Vicerrector', 'Vicerrector'),
     )
