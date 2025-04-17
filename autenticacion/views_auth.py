@@ -29,7 +29,7 @@ class LoginView(APIView):
                 "user": {
                     "id": user.id,
                     "correo": user.email,
-                    "nombre": user.get_full_name(),
+                    "nombre": user.nombre,
                     "rol": user.rol,
                 }
             }, status=status.HTTP_200_OK)
