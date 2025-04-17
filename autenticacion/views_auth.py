@@ -12,7 +12,7 @@ class LoginView(APIView):
     devuelve el token y datos básicos del usuario.
     """
     def post(self, request, format=None):
-        correo = request.data.get("correo")
+        correo = request.data.get("correo", "").lower()
         password = request.data.get("password")
         User = get_user_model()
         try:
@@ -21,6 +21,13 @@ class LoginView(APIView):
         except User.DoesNotExist:
             return Response({"error": "Credenciales inválidas"}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Verificamos que la cuenta esté activa
+        if not user.is_active:
+            return Response(
+                {"error": "Cuenta inactiva, contacte al administrador"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Verificamos la contraseña
         if user.check_password(password):
             token, created = Token.objects.get_or_create(user=user)

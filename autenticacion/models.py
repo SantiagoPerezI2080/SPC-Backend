@@ -24,6 +24,7 @@ class CustomUser(AbstractUser):
         self.username = self.nombre.lower().replace(" ", "_")+str(time.time() * 1000)  # Cambia el username
 
     def set_email(self):
+        self.correo = self.correo.lower()
         self.email = self.correo  # Cambia el correo
 
     def __str__(self):
