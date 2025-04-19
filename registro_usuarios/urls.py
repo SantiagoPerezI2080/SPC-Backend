@@ -9,5 +9,4 @@ router.register(r'registro', views.RegistroUViewSet, 'registro_usuarios')
 urlpatterns = [
     path('api/v1/', include(router.urls)),
     path("docs/", include_docs_urls(title="Registro usuarios API")),
-    #path("usuario/login", include_docs_urls(title="Registro usuarios API")),
 ]

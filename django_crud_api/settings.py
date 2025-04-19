@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'registro_usuarios',
     'rest_framework',
     'rest_framework.authtoken',
+    'proyecciones',
 ]
 
 MIDDLEWARE = [
