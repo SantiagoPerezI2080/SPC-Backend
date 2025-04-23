@@ -42,7 +42,7 @@ class Proyeccion(models.Model):
     anio = models.IntegerField()
     periodo = models.IntegerField()
     version = models.CharField(max_length=50)
-    proprama = models.CharField(max_length=100)
+    programa = models.CharField(max_length=100)
     semestre = models.CharField(max_length=50)
     curso = models.CharField(max_length=100)
     cupos_maximos = models.IntegerField()
