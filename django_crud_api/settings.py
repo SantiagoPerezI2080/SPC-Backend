@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
+import os
 
 from pathlib import Path
 
@@ -40,10 +41,11 @@ INSTALLED_APPS = [
     'corsheaders',
     'coreapi',
     'autenticacion',
+    'uploads',
+    'proyecciones',
     'registro_usuarios',
     'rest_framework',
     'rest_framework.authtoken',
-    'proyecciones',
 ]
 
 MIDDLEWARE = [
@@ -141,3 +143,10 @@ REST_FRAMEWORK = {
 }
 
 AUTH_USER_MODEL = 'autenticacion.CustomUser'
+
+# Para permitir el uso de archivos estáticos y medios en el servidor de desarrollo
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Directorio para almacenar archivos subidos
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
