@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
+from proyecciones.models import Curso
 
 
 class UploadCSVView(APIView):
@@ -19,7 +20,7 @@ class UploadCSVView(APIView):
         if not csv_file:
             return Response({'error': 'No se ha enviado ningún archivo'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Guardar en disco
+        # 1) Guardar en disco
         target_dir = os.path.join(settings.MEDIA_ROOT, 'csvs')
         os.makedirs(target_dir, exist_ok=True)
         filename = f"{file_type}.csv"
@@ -29,7 +30,49 @@ class UploadCSVView(APIView):
             for chunk in csv_file.chunks():
                 f.write(chunk)
 
-        return Response({'message': f'Archivo {file_type.upper()} cargado correctamente'}, status=status.HTTP_200_OK)
+        # 2) Procesar solo si es el archivo "a"
+        if file_type == 'a':
+            try:
+                # lee con separador punto y coma
+                df = pd.read_csv(filepath, sep=';', engine='python')
+            except Exception as e:
+                return Response({'error': f'Error al leer CSV: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # columnas esperadas en orden
+            expected = ['Cod_Curso','Semestre','Nom_Curso','JORNADA','Grupo','Programa','Cupo_Max','No_Estud']
+            missing = [c for c in expected if c not in df.columns]
+            if missing:
+                return Response({'error': f'Columnas faltantes: {missing}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Insertar un Curso por cada fila, sin eliminar duplicados
+            created = 0
+            errores = []
+            for idx, row in df.iterrows():
+                try:
+                    Curso.objects.create(
+                        cod_curso=int(row['Cod_Curso']),
+                        semestre=str(row['Semestre']),
+                        nom_curso=str(row['Nom_Curso']),
+                        jornada=str(row['JORNADA']),
+                        grupo=str(row['Grupo']),
+                        programa=str(row['Programa']),
+                        cupo_max=int(row['Cupo_Max']),
+                        no_estudiantes=int(row['No_Estud']),
+                    )
+                    created += 1
+                except Exception as e:
+                    errores.append({'fila': idx, 'error': str(e)})
+
+            return Response({
+                'message': f'Archivo {file_type.upper()} cargado. '
+                           f'{created} registros insertados.',
+                'errores': errores
+            }, status=status.HTTP_200_OK)
+
+        return Response(
+            {'message': f'Archivo {file_type.upper()} cargado correctamente y procesado'},
+            status=status.HTTP_200_OK
+        )
 
 class ListUploadedCSVs(APIView):
     """

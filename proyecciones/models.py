@@ -17,9 +17,12 @@ class Curso(models.Model):
     nom_curso = models.CharField(max_length=100)
     jornada = models.CharField(max_length=50)
     grupo = models.CharField(max_length=50)
-    programa = models.ForeignKey(Programa, on_delete=models.CASCADE, related_name='cursos')
+    programa = models.CharField(max_length=100)
     cupo_max = models.IntegerField()
     no_estudiantes = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.cod_curso} – {self.nom_curso}"
 
 class ComportamientoCurso(models.Model):
     id_comportamiento = models.AutoField(primary_key=True)
