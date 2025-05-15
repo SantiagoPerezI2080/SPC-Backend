@@ -5,13 +5,14 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
-from proyecciones.models import Curso
+from proyecciones.models import Curso, ComportamientoCurso
 
 
 class UploadCSVView(APIView):
     """
-    Recibe un CSV en formato multipart/form-data y lo guarda en MEDIA_ROOT/csvs/<file_type>.csv
-    No valida columnas, acepta cualquier encabezado.
+    Recibe un CSV en multipart/form-data, lo guarda en MEDIA_ROOT/csvs/<file_type>.csv
+    y si file_type == 'a' lo procesa hacia Curso,
+    si file_type == 'b' lo procesa hacia ComportamientoCurso (limpiando antes la tabla).
     """
     parser_classes = [MultiPartParser]
 
@@ -25,52 +26,86 @@ class UploadCSVView(APIView):
         os.makedirs(target_dir, exist_ok=True)
         filename = f"{file_type}.csv"
         filepath = os.path.join(target_dir, filename)
-
         with open(filepath, 'wb+') as f:
             for chunk in csv_file.chunks():
                 f.write(chunk)
 
-        # 2) Procesar solo si es el archivo "a"
+        # 2) Procesar según tipo
         if file_type == 'a':
+            # <-- LIMPIAR LA TABLA Curso antes de cargar
+            Curso.objects.all().delete()
+            # === tu lógica actual para a tabla Curso ===
             try:
-                # lee con separador punto y coma
                 df = pd.read_csv(filepath, sep=';', engine='python')
             except Exception as e:
-                return Response({'error': f'Error al leer CSV: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Error al leer CSV A: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # columnas esperadas en orden
             expected = ['Cod_Curso','Semestre','Nom_Curso','JORNADA','Grupo','Programa','Cupo_Max','No_Estud']
             missing = [c for c in expected if c not in df.columns]
             if missing:
-                return Response({'error': f'Columnas faltantes: {missing}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': f'Columnas faltantes en A: {missing}'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Insertar un Curso por cada fila, sin eliminar duplicados
-            created = 0
-            errores = []
-            for idx, row in df.iterrows():
-                try:
-                    Curso.objects.create(
-                        cod_curso=int(row['Cod_Curso']),
-                        semestre=str(row['Semestre']),
-                        nom_curso=str(row['Nom_Curso']),
-                        jornada=str(row['JORNADA']),
-                        grupo=str(row['Grupo']),
-                        programa=str(row['Programa']),
-                        cupo_max=int(row['Cupo_Max']),
-                        no_estudiantes=int(row['No_Estud']),
-                    )
-                    created += 1
-                except Exception as e:
-                    errores.append({'fila': idx, 'error': str(e)})
+            for _, row in df.iterrows():
+                Curso.objects.create(
+                    cod_curso=int(row['Cod_Curso']),
+                    semestre=row['Semestre'],
+                    nom_curso=row['Nom_Curso'],
+                    jornada=row['JORNADA'],
+                    grupo=row['Grupo'],
+                    programa=row['Programa'],
+                    cupo_max=int(row['Cupo_Max']),
+                    no_estudiantes=int(row['No_Estud']),
+                )
 
-            return Response({
-                'message': f'Archivo {file_type.upper()} cargado. '
-                           f'{created} registros insertados.',
-                'errores': errores
-            }, status=status.HTTP_200_OK)
+        elif file_type == 'b':
+            # === nueva lógica para B tabla ComportamientoCurso ===
+            try:
+                df = pd.read_csv(filepath, sep=';', engine='python')
+            except Exception as e:
+                return Response({'error': f'Error al leer CSV B: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            expected_b = [
+                'Programa','Cod_Curso','Cod_semestre','Semestre','Nom_Curso',
+                'Cod_Jornada','JORNADA','Grupo','No_Estud',
+                'Prom_Nota','Habilitan','PierdenH','Pierden_Total'
+            ]
+            missing_b = [c for c in expected_b if c not in df.columns]
+            if missing_b:
+                return Response({'error': f'Columnas faltantes en B: {missing_b}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Limpia tabla ComportamientoCurso
+            ComportamientoCurso.objects.all().delete()
+
+            # Inserta siempre un nuevo registro por fila
+            for _, row in df.iterrows():
+                # Extraemos el valor original como string y sustituimos "," por "."
+                raw_prom = str(row['Prom_Nota']).strip()
+                prom = 0.0
+                if raw_prom and raw_prom.lower() not in {'nan', 'none'}:
+                    prom = float(raw_prom.replace(',', '.'))
+
+                ComportamientoCurso.objects.create(
+                    programa=row['Programa'],
+                    cod_curso=int(row['Cod_Curso']),
+                    cod_semestre=str(row['Cod_semestre']),
+                    semestre=row['Semestre'],
+                    nom_curso=row['Nom_Curso'],
+                    cod_jornada=str(row['Cod_Jornada']),
+                    jornada=row['JORNADA'],
+                    grupo=row['Grupo'],
+                    no_estudiantes=int(row['No_Estud']),
+                    prom_nota=prom,
+                    habilitan=int(row['Habilitan']),
+                    pierdenh=int(row['PierdenH']),
+                    pierden_total=int(row['Pierden_Total']),
+                )
+
+        else:
+            # tipo no soportado
+            return Response({'error': f'Tipo de archivo "{file_type}" no soportado'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
-            {'message': f'Archivo {file_type.upper()} cargado correctamente y procesado'},
+            {'message': f'Archivo {file_type.upper()} cargado y procesado correctamente'},
             status=status.HTTP_200_OK
         )
 

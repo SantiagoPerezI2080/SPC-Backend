@@ -26,8 +26,8 @@ class Curso(models.Model):
 
 class ComportamientoCurso(models.Model):
     id_comportamiento = models.AutoField(primary_key=True)
-    programa = models.ForeignKey(Programa, on_delete=models.CASCADE, related_name='comportamientos')
-    cod_curso = models.ForeignKey(Curso, on_delete=models.CASCADE, related_name='comportamientos')
+    programa = models.CharField(max_length=100)
+    cod_curso = models.IntegerField()
     cod_semestre = models.CharField(max_length=50)
     semestre = models.CharField(max_length=50)
     nom_curso = models.CharField(max_length=100)
