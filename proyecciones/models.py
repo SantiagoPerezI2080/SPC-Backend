@@ -48,5 +48,6 @@ class Proyeccion(models.Model):
     programa = models.CharField(max_length=100)
     semestre = models.CharField(max_length=50)
     curso = models.CharField(max_length=100)
-    cupos_maximos = models.IntegerField()
-    grupos = models.IntegerField()
+    grupo = models.CharField(max_length=50)
+    cupo_max = models.IntegerField()
+    no_estud_final = models.IntegerField(default=0)

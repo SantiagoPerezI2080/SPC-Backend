@@ -6,7 +6,7 @@ router = routers.DefaultRouter()
 router.register(r'programas', ProgramaViewSet)
 router.register(r'cursos', CursoViewSet)
 router.register(r'comportamientos', ComportamientoCursoViewSet)
-router.register(r'proyecciones', ProyeccionViewSet)
+router.register(r'proyeccionesPreyFin', ProyeccionViewSet)
 
 urlpatterns = [
     path('proyecciones/', include(router.urls)),

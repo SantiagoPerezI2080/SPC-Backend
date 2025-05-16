@@ -25,4 +25,5 @@ urlpatterns = [
     path('api/', include('autenticacion.urls')),
     path('proyecciones/', include('proyecciones.urls')),
     path('api/', include('uploads.urls')),
+    path('api/', include('proyecciones.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)  # Para servir archivos estáticos y medios en el servidor de desarrollo
