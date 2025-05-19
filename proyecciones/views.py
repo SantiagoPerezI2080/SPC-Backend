@@ -73,3 +73,17 @@ class ProyeccionViewSet(viewsets.ModelViewSet):
                     )
                     created += 1
         return Response({'message': f'Se generaron {created} proyecciones.'}, status=status.HTTP_200_OK)
+
+# tre todas las tablas 
+
+class ProyeccionView (viewsets.ModelViewSet):
+    serializer_class = ProyeccionSerializer
+    queryset = Proyeccion.objects.all()
+
+class VercomportamientoView (viewsets.ModelViewSet):
+    serializer_class = ComportamientoCursoSerializer
+    queryset = ComportamientoCurso.objects.all()
+
+class VerCursosView (viewsets.ModelViewSet):
+    serializer_class = CursoSerializer
+    queryset = Curso.objects.all()

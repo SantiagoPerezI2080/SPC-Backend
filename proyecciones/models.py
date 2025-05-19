@@ -40,6 +40,9 @@ class ComportamientoCurso(models.Model):
     pierdenh = models.IntegerField()
     pierden_total = models.IntegerField()
 
+    def __str__(self):
+        return super().__str__()
+
 class Proyeccion(models.Model):
     id_proyeccion = models.AutoField(primary_key=True)
     anio = models.IntegerField()
@@ -51,3 +54,6 @@ class Proyeccion(models.Model):
     grupo = models.CharField(max_length=50)
     cupo_max = models.IntegerField()
     no_estud_final = models.IntegerField(default=0)
+
+    def __str__(self):
+        return super().__str__()
