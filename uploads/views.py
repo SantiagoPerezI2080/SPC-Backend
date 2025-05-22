@@ -100,6 +100,27 @@ class UploadCSVView(APIView):
                     pierden_total=int(row['Pierden_Total']),
                 )
 
+        elif file_type == 'prerrequisitos':
+            from proyecciones.models import Prerequisito
+            # guardar y luego limpiar
+            Prerequisito.objects.all().delete()
+            try:
+                df = pd.read_csv(filepath, sep=';', engine='python')
+            except Exception as e:
+                return Response({'error': f'Error al leer CSV prerrequisitos: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            expected_pr = ['Cod_Curso','Semestre','Cod_Semestre','Nom_Curso','Prerrequisito']
+            missing_pr = [c for c in expected_pr if c not in df.columns]
+            if missing_pr:
+                return Response({'error': f'Columnas faltantes en prerrequisitos: {missing_pr}'}, status=status.HTTP_400_BAD_REQUEST)
+            for _, row in df.iterrows():
+                Prerequisito.objects.create(
+                    cod_curso=int(row['Cod_Curso']),
+                    semestre=row['Semestre'],
+                    cod_semestre=int(row['Cod_Semestre']),
+                    nom_curso=row['Nom_Curso'],
+                    prerrequisito=row['Prerrequisito'],
+                )
+
         else:
             # tipo no soportado
             return Response({'error': f'Tipo de archivo "{file_type}" no soportado'}, status=status.HTTP_400_BAD_REQUEST)

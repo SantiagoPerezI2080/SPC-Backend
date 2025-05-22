@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework import routers
 from .views import *
 from proyecciones import views
+import urllib.parse
 
 router = routers.DefaultRouter()
 router.register(r'Proyeccion', views.ProyeccionView, 'Proyeccion')
@@ -18,5 +19,5 @@ urlpatterns = [
     path('proyecciones/v1/',include(router.urls)),
     path('comportamiento/v1/',include(router.urls)),
     path('cursos/v1/',include(router.urls)),
-
+    path('exportar-proyecciones/', views.exportar_proyecciones_csv, name='exportar_proyecciones'),
 ]

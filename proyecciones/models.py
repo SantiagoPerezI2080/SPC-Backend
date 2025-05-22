@@ -57,3 +57,13 @@ class Proyeccion(models.Model):
 
     def __str__(self):
         return super().__str__()
+    
+class Prerequisito(models.Model):
+    cod_curso = models.IntegerField()
+    semestre = models.CharField(max_length=50)
+    cod_semestre = models.IntegerField()
+    nom_curso = models.CharField(max_length=100)
+    prerrequisito = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.cod_semestre} - {self.nom_curso}: {self.prerrequisito}"

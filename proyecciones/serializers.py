@@ -20,3 +20,8 @@ class ProyeccionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proyeccion
         fields = '__all__'
+
+class PrerequisitoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prerequisito
+        fields = '__all__'
