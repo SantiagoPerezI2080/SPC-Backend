@@ -54,6 +54,7 @@ class Proyeccion(models.Model):
     grupo = models.CharField(max_length=50)
     cupo_max = models.IntegerField()
     no_estud_final = models.IntegerField(default=0)
+    
 
     def __str__(self):
         return super().__str__()
