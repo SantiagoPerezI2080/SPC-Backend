@@ -63,7 +63,7 @@ class Prerequisito(models.Model):
     cod_curso = models.IntegerField()
     semestre = models.CharField(max_length=50)
     cod_semestre = models.IntegerField()
-    nom_curso = models.CharField(max_length=100)
+    nom_curso = models.CharField(max_length=90)
     prerrequisito = models.CharField(max_length=100)
 
     def __str__(self):
