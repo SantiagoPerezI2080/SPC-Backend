@@ -5,12 +5,25 @@ from .serializers import *
 from .models import *
 from django.db.models import Sum
 from django.shortcuts import render
+import math
 
 from .models import Prerequisito, Curso, ComportamientoCurso, Proyeccion
 from django.http import HttpResponse
 import csv
 from django.http import HttpResponse
 from django.db.models import Q
+
+SEMESTRE_MAP = {
+    1: 'PRIMER SEMESTRE',
+    2: 'SEGUNDO SEMESTRE',
+    3: 'TERCER SEMESTRE',
+    4: 'CUARTO SEMESTRE',
+    5: 'QUINTO SEMESTRE',
+    6: 'SEXTO SEMESTRE',
+    7: 'SEPTIMO SEMESTRE',
+    8: 'OCTAVO SEMESTRE',
+    9: 'NOVENO SEMESTRE',
+}
 
 class ProgramaViewSet(viewsets.ModelViewSet):
     queryset = Programa.objects.all()
@@ -84,43 +97,68 @@ class ProyeccionViewSet(viewsets.ModelViewSet):
 # Genera la proyeción preliminar
     @action(detail=False, methods=['post'], url_path='generate_preliminar')
     def generate_preliminar(self, request):
-        """
-        Genera proyecciones preliminares usando la tabla Prerequisito + Curso.
-        Payload esperado: { anio, periodo, version }  (version = 'Preliminar')
-        """
         anio     = request.data.get('anio')
         periodo  = request.data.get('periodo')
         version  = request.data.get('version')
-
         if not all([anio, periodo, version]):
             return Response({'error': 'Faltan datos'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Eliminamos previas de esta combo
+        # Borro las preliminares previas
         Proyeccion.objects.filter(anio=anio, periodo=periodo, version=version).delete()
 
         created = 0
-        prereqs = Prerequisito.objects.all()
-        for pr in prereqs:
-            # <-- CAMBIO: use filter() en lugar de get() para múltiples grupos
-            matching_courses = Curso.objects.filter(
-                cod_curso=pr.cod_curso,
-                semestre=pr.semestre,
-                nom_curso=pr.nom_curso
-            )
-            for curso in matching_courses:
-                # Aquí tu lógica de preliminar (placeholder)
-                no_est = curso.no_estudiantes
 
+        for pr in Prerequisito.objects.all().order_by('cod_semestre'):
+            prev_code = pr.cod_semestre - 1
+            prev_sem  = SEMESTRE_MAP.get(prev_code)
+
+            # 1) Calcular no_est_final
+            if pr.prerrequisito.upper() == 'PROM':
+                # TODOS los cursos del semestre anterior
+                prev_cursos = Curso.objects.filter(semestre=prev_sem) if prev_sem else Curso.objects.none()
+
+                # promedio por curso
+                avg_por_curso = []
+                for nombre in prev_cursos.values_list('nom_curso', flat=True).distinct():
+                    group = prev_cursos.filter(nom_curso=nombre)
+                    total = sum(c.no_estudiantes for c in group)
+                    avg_por_curso.append(total / group.count())
+
+                no_est_final = math.ceil(sum(avg_por_curso) / len(avg_por_curso)) if avg_por_curso else 0
+
+                # heredo grupos y cupos de TODO prev_cursos
+                grupos = sorted({c.grupo for c in prev_cursos})
+                cupos = [c.cupo_max for c in prev_cursos]
+                cupo_final = math.ceil(sum(cupos) / len(cupos)) if cupos else 0
+
+            else:
+                # solo aquellos cursos cuyo nom_curso es el prerrequisito
+                mismos = Curso.objects.filter(
+                    nom_curso=pr.prerrequisito,
+                    semestre=prev_sem
+                ) if prev_sem else Curso.objects.none()
+
+                total = sum(c.no_estudiantes for c in mismos)
+                no_est_final = math.ceil(total / mismos.count()) if mismos.exists() else 0
+
+                grupos = sorted({c.grupo for c in mismos})
+                cupos = [c.cupo_max for c in mismos]
+                cupo_final = math.ceil(sum(cupos) / len(cupos)) if cupos else 0
+
+            # 2) Inserto una Proyección por cada grupo calculado
+            programa = prev_cursos.first().programa if pr.prerrequisito.upper()=='PROM' and prev_cursos.exists() \
+                       else (mismos.first().programa if mismos.exists() else '')
+            for g in grupos:
                 Proyeccion.objects.create(
                     anio=anio,
                     periodo=periodo,
                     version=version,
-                    programa=curso.programa,
-                    semestre=curso.semestre,
-                    curso=curso.nom_curso,
-                    grupo=curso.grupo,            # ahora itera por cada grupo
-                    cupo_max=curso.cupo_max,
-                    no_estud_final=no_est
+                    programa=programa,
+                    semestre=pr.semestre,
+                    curso=pr.nom_curso,
+                    grupo=g,
+                    cupo_max=cupo_final,
+                    no_estud_final=no_est_final
                 )
                 created += 1
 
