@@ -5,6 +5,7 @@ from .serializers import *
 from .models import *
 from django.db.models import Sum
 from django.shortcuts import render
+from math import ceil
 import math
 
 from .models import Prerequisito, Curso, ComportamientoCurso, Proyeccion
@@ -12,6 +13,7 @@ from django.http import HttpResponse
 import csv
 from django.http import HttpResponse
 from django.db.models import Q
+
 
 SEMESTRE_MAP = {
     1: 'PRIMER SEMESTRE',
@@ -46,53 +48,84 @@ class ProyeccionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     # Genera la proyección final
-    @action(detail=False, methods=['post'], url_path='generate')  # MODIFICADO: ya no pide programa
+    @action(detail=False, methods=['post'], url_path='generate')
     def generate(self, request):
         """
-        Genera las proyecciones finales sin solicitar programa.
-        Payload esperado: { anio, periodo, version }
-        Los programas se obtienen de los registros en ComportamientoCurso.
+        Genera las proyecciones finales sin selector de programa.
+        Lógica:
+        1. Para cada programa distinto en ComportamientoCurso...
+        2. Para cada curso (cod_curso, semestre, nom_curso) de ese programa:
+           a) Sumar (no_estudiantes - pierden_total) de todos los grupos -> total_final
+           b) Calcular cupo_medio_dest = ceil(promedio de cupo_max en Curso destino)
+           c) n_grupos = ceil(total_final / cupo_medio_dest)
+           d) size_grupo = ceil(total_final / n_grupos)
+           e) Crear n_grupos filas A, B, C… con cupo_max = cupo_medio_dest y no_estud_final = size_grupo
         """
         anio    = request.data.get('anio')
         periodo = request.data.get('periodo')
         version = request.data.get('version')
-
-        # Validaciones básicas
         if not all([anio, periodo, version]):
             return Response({'error': 'Faltan datos'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Limpiar proyecciones previas para esta versión
+        # 0) limpieza
         Proyeccion.objects.filter(anio=anio, periodo=periodo, version=version).delete()
 
         created = 0
-        # Obtiene los programas de los comportamientos
         programas = ComportamientoCurso.objects.values_list('programa', flat=True).distinct()
+
         for prog in programas:
-            cursos = Curso.objects.filter(programa=prog)
-            for curso in cursos:
+            # cursos únicos en comportamiento para este programa
+            cursos_keys = ComportamientoCurso.objects.filter(programa=prog) \
+                .values('cod_curso','semestre','nom_curso') \
+                .distinct()
+
+            for key in cursos_keys:
+                cod = key['cod_curso']
+                sem = key['semestre']
+                nombre = key['nom_curso']
+
+                # a) total_final
                 comps = ComportamientoCurso.objects.filter(
                     programa=prog,
-                    cod_curso=curso.cod_curso,
-                    semestre=curso.semestre,
-                    nom_curso=curso.nom_curso,
-                    grupo=curso.grupo
+                    cod_curso=cod,
+                    semestre=sem,
+                    nom_curso=nombre
                 )
-                for comp in comps:
-                    # Se hace la operación para calcular el número de estudiantes
-                    no_est = curso.no_estudiantes - comp.pierden_total
+                total_final = sum(c.no_estudiantes - c.pierden_total for c in comps)
+
+                # b) cupo medio en Curso destino
+                cursos_dest = Curso.objects.filter(cod_curso=cod, semestre=sem, nom_curso=nombre)
+                cupos = [c.cupo_max for c in cursos_dest]
+                if not cupos:
+                    continue  # no hay datos de cupo, saltar
+                cupo_medio = ceil(sum(cupos) / len(cupos))
+
+                # c) número de grupos nuevos
+                n_grupos = ceil(total_final / cupo_medio) if cupo_medio > 0 else 1
+
+                # d) tamaño de cada grupo
+                size_grupo = ceil(total_final / n_grupos) if n_grupos > 0 else 0
+
+                # e) crear filas A, B, C…
+                for i in range(n_grupos):
+                    grupo = chr(ord('A') + i)
                     Proyeccion.objects.create(
                         anio=anio,
                         periodo=periodo,
                         version=version,
                         programa=prog,
-                        semestre=curso.semestre,
-                        curso=curso.nom_curso,
-                        grupo=curso.grupo,
-                        cupo_max=curso.cupo_max,
-                        no_estud_final=no_est
+                        semestre=sem,
+                        curso=nombre,
+                        grupo=grupo,
+                        cupo_max=cupo_medio,
+                        no_estud_final=size_grupo
                     )
                     created += 1
-        return Response({'message': f'Se generaron {created} proyecciones.'}, status=status.HTTP_200_OK)
+
+        return Response(
+            {'message': f'Se generaron {created} proyecciones finales.'},
+            status=status.HTTP_200_OK
+        )
 
 # Genera la proyeción preliminar
     @action(detail=False, methods=['post'], url_path='generate_preliminar')
