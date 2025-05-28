@@ -51,15 +51,16 @@ class ProyeccionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='generate')
     def generate(self, request):
         """
-        Genera las proyecciones finales sin selector de programa.
-        Lógica:
-        1. Para cada programa distinto en ComportamientoCurso...
-        2. Para cada curso (cod_curso, semestre, nom_curso) de ese programa:
-           a) Sumar (no_estudiantes - pierden_total) de todos los grupos -> total_final
-           b) Calcular cupo_medio_dest = ceil(promedio de cupo_max en Curso destino)
-           c) n_grupos = ceil(total_final / cupo_medio_dest)
-           d) size_grupo = ceil(total_final / n_grupos)
-           e) Crear n_grupos filas A, B, C… con cupo_max = cupo_medio_dest y no_estud_final = size_grupo
+        Genera las proyecciones finales usando Prerequisito + ComportamientoCurso + Curso.
+        Lógica paso a paso:
+        1. Para cada prerequisito pr en orden de semestre:
+           - Determinar semestre anterior prev_sem.
+           - Recoger el comportamiento de pr.prerrequisito en prev_sem.
+           - total_final = suma(no_estudiantes - pierden_total) de ese comportamiento.
+           - cupo_medio = ceil(promedio de cupo_max del curso origen, i.e. pr.prerrequisito en prev_sem).
+           - n_grupos = ceil(total_final / cupo_medio)
+           - size_group = ceil(total_final / n_grupos)
+           - Crear n_grupos proyecciones para el curso destino (pr.nom_curso) con esos valores.
         """
         anio    = request.data.get('anio')
         periodo = request.data.get('periodo')
@@ -67,60 +68,69 @@ class ProyeccionViewSet(viewsets.ModelViewSet):
         if not all([anio, periodo, version]):
             return Response({'error': 'Faltan datos'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 0) limpieza
+        # 0) Limpieza de proyecciones previas
         Proyeccion.objects.filter(anio=anio, periodo=periodo, version=version).delete()
-
         created = 0
-        programas = ComportamientoCurso.objects.values_list('programa', flat=True).distinct()
 
-        for prog in programas:
-            # cursos únicos en comportamiento para este programa
-            cursos_keys = ComportamientoCurso.objects.filter(programa=prog) \
-                .values('cod_curso','semestre','nom_curso') \
-                .distinct()
+        for pr in Prerequisito.objects.all().order_by('cod_semestre'):
+            prev_code = pr.cod_semestre - 1
+            prev_sem  = SEMESTRE_MAP.get(prev_code)
+            origen    = pr.prerrequisito
+            destino   = pr.nom_curso
+            semestre_dest = pr.semestre
 
-            for key in cursos_keys:
-                cod = key['cod_curso']
-                sem = key['semestre']
-                nombre = key['nom_curso']
-
-                # a) total_final
+            # 1) Recoger comportamiento del curso ORIGEN en semestre anterior
+            if prev_sem:
                 comps = ComportamientoCurso.objects.filter(
-                    programa=prog,
-                    cod_curso=cod,
-                    semestre=sem,
-                    nom_curso=nombre
+                    nom_curso=origen,
+                    semestre=prev_sem
                 )
-                total_final = sum(c.no_estudiantes - c.pierden_total for c in comps)
+                cursos_origen = Curso.objects.filter(
+                    nom_curso=origen,
+                    semestre=prev_sem
+                )
+            else:
+                comps = ComportamientoCurso.objects.none()
+                cursos_origen = Curso.objects.none()
 
-                # b) cupo medio en Curso destino
-                cursos_dest = Curso.objects.filter(cod_curso=cod, semestre=sem, nom_curso=nombre)
-                cupos = [c.cupo_max for c in cursos_dest]
-                if not cupos:
-                    continue  # no hay datos de cupo, saltar
-                cupo_medio = ceil(sum(cupos) / len(cupos))
+            # 2) Calcular total_final = Σ(no_estudiantes - pierden_total)
+            total_final = sum(c.no_estudiantes - c.pierden_total for c in comps)
+            if total_final <= 0:
+                continue
 
-                # c) número de grupos nuevos
-                n_grupos = ceil(total_final / cupo_medio) if cupo_medio > 0 else 1
+            # 3) Calcular cupo_medio usando CUPO_MAX de curso ORIGEN
+            cupos_origen = [c.cupo_max for c in cursos_origen]
+            if not cupos_origen:
+                continue
+            cupo_medio = ceil(sum(cupos_origen) / len(cupos_origen))
 
-                # d) tamaño de cada grupo
-                size_grupo = ceil(total_final / n_grupos) if n_grupos > 0 else 0
+            # 4) Determinar número de grupos y tamaño
+            n_grupos   = ceil(total_final / cupo_medio)
+            size_group = ceil(total_final / n_grupos)
 
-                # e) crear filas A, B, C…
-                for i in range(n_grupos):
-                    grupo = chr(ord('A') + i)
-                    Proyeccion.objects.create(
-                        anio=anio,
-                        periodo=periodo,
-                        version=version,
-                        programa=prog,
-                        semestre=sem,
-                        curso=nombre,
-                        grupo=grupo,
-                        cupo_max=cupo_medio,
-                        no_estud_final=size_grupo
-                    )
-                    created += 1
+            # 5) Heredar programa del primer comportamiento si existe, si no del primer curso origen
+            if comps.exists():
+                programa = comps.first().programa
+            elif cursos_origen.exists():
+                programa = cursos_origen.first().programa
+            else:
+                programa = ''
+
+            # 6) Crear proyecciones destino
+            for i in range(n_grupos):
+                grupo = chr(ord('A') + i)
+                Proyeccion.objects.create(
+                    anio=anio,
+                    periodo=periodo,
+                    version=version,
+                    programa=programa,
+                    semestre=semestre_dest,
+                    curso=destino,
+                    grupo=grupo,
+                    cupo_max=cupo_medio,
+                    no_estud_final=size_group
+                )
+                created += 1
 
         return Response(
             {'message': f'Se generaron {created} proyecciones finales.'},
